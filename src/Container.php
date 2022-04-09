@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace DI;
 
+use Closure;
 use DI\Definition\Definition;
 use DI\Definition\Exception\InvalidDefinition;
 use DI\Definition\FactoryDefinition;
@@ -90,9 +91,13 @@ class Container implements ContainerInterface, FactoryInterface, InvokerInterfac
      * If you want to customize the container's behavior, you are discouraged to create and pass the
      * dependencies yourself, the ContainerBuilder class is here to help you instead.
      *
+     * @param \DI\Definition\Source\MutableDefinitionSource|null $definitionSource
+     * @param \DI\Proxy\ProxyFactory|null $proxyFactory
+     * @param \Psr\Container\ContainerInterface|null $wrapperContainer If the container is wrapped by another container.
+     *
+     * @throws \Exception
      * @see ContainerBuilder
      *
-     * @param ContainerInterface $wrapperContainer If the container is wrapped by another container.
      */
     public function __construct(
         MutableDefinitionSource $definitionSource = null,
@@ -118,37 +123,36 @@ class Container implements ContainerInterface, FactoryInterface, InvokerInterfac
      * Returns an entry of the container by its name.
      *
      * @template T
-     * @param string|class-string<T> $name Entry name or a class name.
      *
-     * @throws DependencyException Error while resolving the entry.
-     * @throws NotFoundException No entry found for the given name.
+     * @param string|class-string<T> $id Entry name or a class name.
+     *
      * @return mixed|T
+     * @throws NotFoundException No entry found for the given name.
+     * @throws DependencyException|\DI\Definition\Exception\InvalidDefinition Error while resolving the entry.
      */
-    public function get($name)
+    public function get(string $id)
     {
         // If the entry is already resolved we return it
-        if (isset($this->resolvedEntries[$name]) || array_key_exists($name, $this->resolvedEntries)) {
-            return $this->resolvedEntries[$name];
+        if (isset($this->resolvedEntries[$id]) || array_key_exists($id, $this->resolvedEntries)) {
+            return $this->resolvedEntries[$id];
         }
 
-        $definition = $this->getDefinition($name);
+        $definition = $this->getDefinition($id);
         if (! $definition) {
-            throw new NotFoundException("No entry or class found for '$name'");
+            throw new NotFoundException("No entry or class found for '$id'");
         }
 
         $value = $this->resolveDefinition($definition);
 
-        $this->resolvedEntries[$name] = $value;
+        $this->resolvedEntries[$id] = $value;
 
         return $value;
     }
 
     /**
-     * @param string $name
-     *
-     * @return Definition|null
+     * @throws \DI\Definition\Exception\InvalidDefinition
      */
-    private function getDefinition($name)
+    private function getDefinition(string $name): ?Definition
     {
         // Local cache that avoids fetching the same definition twice
         if (!array_key_exists($name, $this->fetchedDefinitions)) {
@@ -174,7 +178,7 @@ class Container implements ContainerInterface, FactoryInterface, InvokerInterfac
      *
      * @throws InvalidArgumentException The name parameter must be of type string.
      * @throws DependencyException Error while resolving the entry.
-     * @throws NotFoundException No entry found for the given name.
+     * @throws NotFoundException|\DI\Definition\Exception\InvalidDefinition No entry found for the given name.
      * @return mixed|T
      */
     public function make($name, array $parameters = [])
@@ -202,25 +206,24 @@ class Container implements ContainerInterface, FactoryInterface, InvokerInterfac
     /**
      * Test if the container can provide something for the given name.
      *
-     * @param string $name Entry name or a class name.
+     * @param string $id Entry name or a class name.
      *
-     * @throws InvalidArgumentException The name parameter must be of type string.
-     * @return bool
+     * @throws InvalidArgumentException|\DI\Definition\Exception\InvalidDefinition The name parameter must be of type string.
      */
-    public function has($name)
+    public function has(string $id): bool
     {
-        if (! is_string($name)) {
+        if (! is_string($id)) {
             throw new InvalidArgumentException(sprintf(
                 'The name parameter must be of type string, %s given',
-                is_object($name) ? get_class($name) : gettype($name)
+                is_object($id) ? get_class($id) : gettype($id)
             ));
         }
 
-        if (array_key_exists($name, $this->resolvedEntries)) {
+        if (array_key_exists($id, $this->resolvedEntries)) {
             return true;
         }
 
-        $definition = $this->getDefinition($name);
+        $definition = $this->getDefinition($id);
         if ($definition === null) {
             return false;
         }
@@ -234,7 +237,7 @@ class Container implements ContainerInterface, FactoryInterface, InvokerInterfac
      * @template T
      * @param object|T $instance Object to perform injection upon
      * @throws InvalidArgumentException
-     * @throws DependencyException Error while injecting dependencies
+     * @throws \DI\Definition\Exception\InvalidDefinition Error while injecting dependencies
      * @return object|T $instance Returns the same instance
      */
     public function injectOn($instance)
@@ -289,7 +292,7 @@ class Container implements ContainerInterface, FactoryInterface, InvokerInterfac
     {
         if ($value instanceof DefinitionHelper) {
             $value = $value->getDefinition($name);
-        } elseif ($value instanceof \Closure) {
+        } elseif ($value instanceof Closure) {
             $value = new FactoryDefinition($name, $value);
         }
 
@@ -372,7 +375,7 @@ class Container implements ContainerInterface, FactoryInterface, InvokerInterfac
      *
      * Checks for circular dependencies while resolving the definition.
      *
-     * @throws DependencyException Error while resolving the entry.
+     * @throws DependencyException|\DI\Definition\Exception\InvalidDefinition Error while resolving the entry.
      * @return mixed
      */
     private function resolveDefinition(Definition $definition, array $parameters = [])
@@ -423,6 +426,9 @@ class Container implements ContainerInterface, FactoryInterface, InvokerInterfac
         return $this->invoker;
     }
 
+    /**
+     * @throws \Exception
+     */
     private function createDefaultDefinitionSource() : SourceChain
     {
         $source = new SourceChain([new ReflectionBasedAutowiring]);
