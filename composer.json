@@ -1,5 +1,5 @@
 {
-    "name": "php-di/php-di",
+    "name": "alexeynight/php-di",
     "type": "library",
     "description": "The dependency injection container for humans",
     "keywords": ["di", "dependency injection", "container", "ioc", "psr-11", "psr11", "container-interop"],
@@ -25,7 +25,7 @@
         "phpstan": "phpstan analyse -l 5 -c phpstan.neon src"
     },
     "require": {
-        "php": ">=7.2.0",
+        "php": "^7.4",
         "psr/container": "^1.0",
         "php-di/invoker": "^2.0",
         "php-di/phpdoc-reader": "^2.0.1",
